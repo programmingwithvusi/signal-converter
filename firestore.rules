@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Write-only usage log: the site can append events, nobody can read them back from the browser.
+    // View the data in the Firebase console.
+    match /usage_events/{eventId} {
+      allow create: if request.resource.data.keys().hasOnly(
+            ['type', 'visitorId', 'uid', 'at', 'method', 'bitrate', 'inputBytes'])
+        && request.resource.data.type in ['visit', 'sign_in', 'sign_up', 'conversion']
+        && request.resource.data.visitorId is string
+        && request.resource.data.visitorId.size() <= 64
+        && request.resource.data.at == request.time
+        && (request.resource.data.uid == null
+            || (request.auth != null && request.resource.data.uid == request.auth.uid));
+      allow read, update, delete: if false;
+    }
+  }
+}

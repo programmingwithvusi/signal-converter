@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 //import JSZip from 'jszip';
 import { useFfmpeg } from './hooks/useFfmpeg';
 import {
@@ -16,8 +23,9 @@ import {
   makeId,
 } from './utils/utils';
 import { useDailyQuota } from './hooks/useDailyQuota';
+import { trackEvent } from './utils/tracking';
 
-export default function App() {
+export default function App({ account }: { account?: ReactNode }) {
   const { load, convert, loadState, loadError } = useFfmpeg();
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
   const [bitrate, setBitrate] =
@@ -132,6 +140,7 @@ export default function App() {
           );
         });
         quota.consume();
+        void trackEvent('conversion', { bitrate, inputBytes: job.file.size });
         setJobs((prev) =>
           prev.map((j) =>
             j.id === job.id
@@ -240,6 +249,7 @@ export default function App() {
     <div className="rack">
       <div className="grain" aria-hidden="true" />
 
+      {account}
       <header className="brand">
         <div className="brand__mark">
           <span className="dial" />
