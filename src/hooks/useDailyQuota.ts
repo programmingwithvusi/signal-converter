@@ -3,7 +3,8 @@ import { useAuth } from './useAuth'
 import { readQuotaCount, recordConversion } from '../utils/quota'
 
 // Keep in step with the limit in firestore.rules — the rules reject writes above it.
-const DEFAULT_DAILY_LIMIT = 5
+// The emulator suite (npm run test:rules) fails if the two drift apart.
+export const DEFAULT_DAILY_LIMIT = 5
 
 function resolveDailyLimit(): number {
     const envLimit = Number(import.meta.env.VITE_DAILY_LIMIT)

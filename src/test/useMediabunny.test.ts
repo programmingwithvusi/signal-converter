@@ -81,4 +81,17 @@ describe('useMediabunny', () => {
         expect(registerMp3Encoder).toHaveBeenCalledOnce()
     })
 
+    it('ends in the error state with a message when the engine cannot be prepared', async () => {
+        const mediabunny = await import('mediabunny')
+        vi.mocked(mediabunny.canEncodeAudio).mockRejectedValueOnce(new Error('WebCodecs unavailable'))
+        const logged = vi.spyOn(console, 'error').mockImplementation(() => { })
+
+        const { result } = renderHook(() => useMediabunny())
+        await act(() => result.current.load())
+
+        expect(result.current.loadState).toBe('error')
+        expect(result.current.loadError).toBe('WebCodecs unavailable')
+        logged.mockRestore()
+    })
+
 })

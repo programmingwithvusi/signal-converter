@@ -80,6 +80,15 @@ npm test
 npm run lint
 ```
 
+`firestore.rules` has its own suite, run against the Firestore emulator. It needs Java 21 or newer
+and downloads the emulator on first use:
+
+```bash
+npm run test:rules
+```
+
+It also checks that the daily limit in the rules matches `DEFAULT_DAILY_LIMIT` in the app.
+
 ## Build for production
 
 ```bash
@@ -90,7 +99,7 @@ Output goes to `dist/`, deployable to any static host. No special server headers
 
 ## Deploy
 
-`.github/workflows/deploy.yml` lints, tests, builds and deploys to Netlify: a preview for each
+`.github/workflows/deploy.yml` lints, runs the unit and rules tests, builds and deploys to Netlify: a preview for each
 pull request into `main`, and production on every push to `main`. It needs these repository
 secrets: the four `VITE_FIREBASE_*` values, `NETLIFY_AUTH_TOKEN` and `NETLIFY_SITE_ID`.
 

@@ -24,12 +24,18 @@ vi.mock('../utils/quota', () => ({
   recordConversion: (...args: unknown[]) => mockRecordConversion(...args),
 }));
 
+// Mutable so a test can put the engine in its loading or failed state.
+const engine = vi.hoisted(() => ({
+  loadState: 'ready' as 'idle' | 'loading' | 'ready' | 'error',
+  loadError: null as string | null,
+}));
+
 vi.mock('../hooks/useMediabunny', () => ({
   useMediabunny: () => ({
     load: vi.fn(),
     convert: mockConvert,
-    loadState: 'ready',
-    loadError: null,
+    loadState: engine.loadState,
+    loadError: engine.loadError,
   }),
 }));
 
@@ -88,6 +94,8 @@ beforeEach(() => {
   URL.createObjectURL = vi.fn(() => 'blob:mock');
   URL.revokeObjectURL = vi.fn();
   vi.stubEnv('VITE_DAILY_LIMIT', '5');
+  engine.loadState = 'ready';
+  engine.loadError = null;
   serverCount = 0;
   mockReadQuota.mockReset();
   mockReadQuota.mockImplementation(async () => serverCount);
@@ -215,6 +223,55 @@ describe('App', () => {
     });
     await convertQueued();
     await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(2));
+  });
+
+  it('adds files chosen with the Browse Files picker, ignoring unsupported ones', async () => {
+    const { container } = render(<App />);
+    const picker = container.querySelector('input[type="file"]')!;
+    await act(async () => {
+      fireEvent.change(picker, {
+        target: { files: [makeFile('picked.mp4'), makeFile('notes.txt')] },
+      });
+    });
+    expect(screen.getByText('picked.mp4')).toBeInTheDocument();
+    expect(screen.queryByText('notes.txt')).not.toBeInTheDocument();
+    expect(screen.getByText('Queue (1)')).toBeInTheDocument();
+  });
+
+  it('converts at 192k unless another bitrate is selected', async () => {
+    render(<App />);
+    await dropFiles('first.mp4');
+    await convertQueued();
+    await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(1));
+    expect(mockConvert.mock.calls[0][1]).toBe('192k');
+
+    fireEvent.click(screen.getByRole('button', { name: '320k' }));
+    await dropFiles('second.mp4');
+    await convertQueued();
+    await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(2));
+    expect(mockConvert.mock.calls[1][1]).toBe('320k');
+  });
+
+  it('reports a failed engine and does not allow converting', async () => {
+    engine.loadState = 'error';
+    engine.loadError = 'WebCodecs unavailable';
+    render(<App />);
+    await dropFiles('clip.mp4');
+    expect(screen.getByText('ENGINE ERROR')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Engine failed — WebCodecs unavailable',
+    );
+    await screen.findByText(/0\/5 today/i);
+    expect(screen.getByRole('button', { name: /convert to mp3/i })).toBeDisabled();
+  });
+
+  it('does not allow converting while the engine is loading', async () => {
+    engine.loadState = 'loading';
+    render(<App />);
+    await dropFiles('clip.mp4');
+    expect(screen.getByText('LOADING ENGINE')).toBeInTheDocument();
+    await screen.findByText(/0\/5 today/i);
+    expect(screen.getByRole('button', { name: /convert to mp3/i })).toBeDisabled();
   });
 
   it('removes a single job from the queue', async () => {
