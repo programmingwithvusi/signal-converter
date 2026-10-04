@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 
-export function useFfmpeg() {
+export function useMediabunny() {
   const readyRef = useRef(false)
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [loadError, setLoadError] = useState<string | null>(null)

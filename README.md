@@ -28,8 +28,12 @@ can't touch the filesystem or spawn native processes, so this rebuild keeps the 
 - **Queue:** per-file progress, retry failed, clear completed, save one file or all as a `.zip`.
 - **Sign-in:** the converter sits behind Firebase Authentication (Google, or email and password
   with password reset).
-- **Daily quota:** 5 conversions per day per browser (1000 in dev). Override with `VITE_DAILY_LIMIT`.
-  The count is kept in `localStorage` and IndexedDB, so it is a soft limit, not a security control.
+- **Daily quota:** 5 conversions per day per account, resetting at midnight UTC. The count lives in
+  a Firestore `quotas/{uid}` document, so it follows the user across browsers and survives clearing
+  site data. `firestore.rules` only lets the owner raise it by one at a time, up to the limit. The
+  converter needs a connection to read the count before it will convert. Because conversion runs in
+  the browser, this deters casual overuse; it cannot stop someone who modifies the page's code.
+  To change the limit, update both `firestore.rules` and `DEFAULT_DAILY_LIMIT` (or `VITE_DAILY_LIMIT`).
 - **Consent banner and usage tracking:** nothing is tracked until the visitor accepts. After that
   the app writes `visit`, `sign_in`, `sign_up` and `conversion` events to a Firestore
   `usage_events` collection, with a random visitor ID cookie, the bitrate and the input size.

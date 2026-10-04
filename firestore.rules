@@ -14,5 +14,32 @@ service cloud.firestore {
             || (request.auth != null && request.resource.data.uid == request.auth.uid));
       allow read, update, delete: if false;
     }
+
+    // Per-account daily conversion count. The owner can read it and raise it by one at a time,
+    // up to the daily limit; it can never be lowered, reset or deleted from the browser.
+    // Days are UTC. Keep the limit in step with DEFAULT_DAILY_LIMIT in src/hooks/useDailyQuota.ts.
+    match /quotas/{uid} {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+      function isValidShape() {
+        return request.resource.data.keys().hasOnly(['count', 'at'])
+          && request.resource.data.keys().hasAll(['count', 'at'])
+          && request.resource.data.count is int
+          && request.resource.data.at == request.time;
+      }
+      function sameUtcDay(a, b) {
+        return a.year() == b.year() && a.month() == b.month() && a.day() == b.day();
+      }
+
+      allow read: if isOwner();
+      allow create: if isOwner() && isValidShape() && request.resource.data.count == 1;
+      allow update: if isOwner() && isValidShape()
+        && (sameUtcDay(resource.data.at, request.time)
+            ? request.resource.data.count == resource.data.count + 1
+              && request.resource.data.count <= 5
+            : request.resource.data.count == 1);
+      allow delete: if false;
+    }
   }
 }

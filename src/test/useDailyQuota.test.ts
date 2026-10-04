@@ -1,127 +1,107 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
+
+const mockUseAuth = vi.fn()
+const mockRead = vi.fn()
+const mockRecord = vi.fn()
+
+vi.mock('../hooks/useAuth', () => ({ useAuth: () => mockUseAuth() }))
+vi.mock('../utils/quota', () => ({
+    readQuotaCount: (...args: unknown[]) => mockRead(...args),
+    recordConversion: (...args: unknown[]) => mockRecord(...args),
+}))
+
 import { useDailyQuota } from '../hooks/useDailyQuota'
 
-// fake-indexeddb provides an in-memory IndexedDB for jsdom, which has none
-// built in. Re-assigning a fresh instance before each test gives full
-// isolation — no leftover data leaking between test cases.
-import { IDBFactory } from 'fake-indexeddb'
-
-const IDB_NAME = '7331676E616C2D636F6E766572746572-ration'
-const IDB_STORE = 'usage'
-
-function todayKey(): string {
-    const d = new Date()
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${y}-${m}-${day}`
-}
-
-// Direct read used only to verify what actually landed in IndexedDB,
-// independent of the hook's own internals.
-function readIdbDirect(): Promise<number> {
-    return new Promise((resolve) => {
-        const req = indexedDB.open(IDB_NAME, 1)
-        req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE)
-        req.onsuccess = () => {
-            const db = req.result
-            const tx = db.transaction(IDB_STORE, 'readonly')
-            const getReq = tx.objectStore(IDB_STORE).get(todayKey())
-            getReq.onsuccess = () => resolve(typeof getReq.result === 'number' ? getReq.result : 0)
-            getReq.onerror = () => resolve(0)
-        }
-        req.onerror = () => resolve(0)
-    })
-}
-
 beforeEach(() => {
-    localStorage.clear()
-        // Fresh in-memory IndexedDB for every test.
-        ; (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = new IDBFactory()
+    mockUseAuth.mockReset()
+    mockRead.mockReset()
+    mockRecord.mockReset()
+    mockUseAuth.mockReturnValue({ user: { uid: 'user-1' }, loading: false })
+    mockRead.mockResolvedValue(0)
+    mockRecord.mockImplementation(async () => 1)
 })
 
+async function renderReady(limit = 5) {
+    const view = renderHook(() => useDailyQuota(limit))
+    await waitFor(() => expect(view.result.current.status).toBe('ready'))
+    return view
+}
+
 describe('useDailyQuota', () => {
-    it('starts at zero used with full remaining', () => {
+    it('allows nothing while the count is still loading', () => {
+        mockRead.mockReturnValue(new Promise(() => {}))
         const { result } = renderHook(() => useDailyQuota(5))
-        expect(result.current.used).toBe(0)
-        expect(result.current.remaining).toBe(5)
+        expect(result.current.status).toBe('loading')
+        expect(result.current.remaining).toBe(0)
+        expect(result.current.remainingNow()).toBe(0)
     })
 
-    it('increments used and decrements remaining on consume', () => {
+    it("loads the signed-in account's count", async () => {
+        mockRead.mockResolvedValue(3)
+        const { result } = await renderReady()
+        expect(mockRead).toHaveBeenCalledWith('user-1')
+        expect(result.current.used).toBe(3)
+        expect(result.current.remaining).toBe(2)
+        expect(result.current.remainingNow()).toBe(2)
+    })
+
+    it('fails closed when the count cannot be read', async () => {
+        mockRead.mockRejectedValue(new Error('offline'))
         const { result } = renderHook(() => useDailyQuota(5))
+        await waitFor(() => expect(result.current.status).toBe('error'))
+        expect(result.current.remaining).toBe(0)
+        expect(result.current.remainingNow()).toBe(0)
+    })
+
+    it('fails closed when nobody is signed in', () => {
+        mockUseAuth.mockReturnValue({ user: null, loading: false })
+        const { result } = renderHook(() => useDailyQuota(5))
+        expect(result.current.status).toBe('error')
+        expect(result.current.remaining).toBe(0)
+        expect(mockRead).not.toHaveBeenCalled()
+    })
+
+    it('counts a conversion immediately and records it against the account', async () => {
+        const { result } = await renderReady()
         act(() => result.current.consume())
         expect(result.current.used).toBe(1)
         expect(result.current.remaining).toBe(4)
+        expect(mockRecord).toHaveBeenCalledWith('user-1')
     })
 
-    it('never goes below zero remaining once exhausted', () => {
-        const { result } = renderHook(() => useDailyQuota(1))
+    it('never goes below zero remaining once exhausted', async () => {
+        const { result } = await renderReady(1)
         act(() => result.current.consume())
         act(() => result.current.consume())
         expect(result.current.remaining).toBe(0)
+        expect(result.current.remainingNow()).toBe(0)
     })
 
-    it('writes consumed count to IndexedDB, not just localStorage', async () => {
-        const { result } = renderHook(() => useDailyQuota(5))
+    it('adopts a higher server count from another tab or browser', async () => {
+        mockRecord.mockResolvedValue(4)
+        const { result } = await renderReady()
         act(() => result.current.consume())
-        act(() => result.current.consume())
-        await waitFor(async () => {
-            expect(await readIdbDirect()).toBe(2)
-        })
-    })
-    it('recovers count from IndexedDB when localStorage was cleared', async () => {
-        const first = renderHook(() => useDailyQuota(5))
-        act(() => first.result.current.consume())
-        act(() => first.result.current.consume())
-        act(() => first.result.current.consume())
-
-        // Wait for the fire-and-forget IndexedDB write to actually land.
-        await waitFor(async () => {
-            expect(await readIdbDirect()).toBe(3)
-        })
-
-        // Simulate someone clearing only localStorage.
-        localStorage.clear()
-
-        const second = renderHook(() => useDailyQuota(5))
-        // Initial synchronous read is 0 (localStorage was wiped)...
-        expect(second.result.current.used).toBe(0)
-
-        // ...but the reconciliation effect should pull it back from IndexedDB.
-        await waitFor(() => {
-            expect(second.result.current.used).toBe(3)
-        })
-        expect(second.result.current.remaining).toBe(2)
+        await waitFor(() => expect(result.current.used).toBe(4))
+        expect(result.current.remainingNow()).toBe(1)
     })
 
-    it('syncs localStorage value up to IndexedDB when IndexedDB was the one cleared', async () => {
-        const first = renderHook(() => useDailyQuota(5))
-        act(() => first.result.current.consume())
-        act(() => first.result.current.consume())
-
-        await waitFor(async () => {
-            expect(await readIdbDirect()).toBe(2)
-        })
-
-            // Simulate IndexedDB being cleared while localStorage survives.
-            ; (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = new IDBFactory()
-
-        renderHook(() => useDailyQuota(5))
-
-        // The reconciliation effect should write localStorage's surviving
-        // value (2) back into the now-empty IndexedDB.
-        await waitFor(async () => {
-            expect(await readIdbDirect()).toBe(2)
-        })
+    it('keeps the in-session count when the write is refused', async () => {
+        mockRecord.mockRejectedValue(new Error('permission-denied'))
+        const { result } = await renderReady()
+        await act(async () => result.current.consume())
+        expect(result.current.used).toBe(1)
+        expect(result.current.status).toBe('ready')
     })
 
-    it('persists usage across hook instances on the same day', () => {
-        const first = renderHook(() => useDailyQuota(5))
-        act(() => first.result.current.consume())
+    it('reloads the count when a different account signs in', async () => {
+        mockRead.mockImplementation(async (uid: string) => (uid === 'user-1' ? 5 : 1))
+        const { result, rerender } = await renderReady()
+        expect(result.current.remaining).toBe(0)
 
-        const second = renderHook(() => useDailyQuota(5))
-        expect(second.result.current.used).toBe(1)
+        mockUseAuth.mockReturnValue({ user: { uid: 'user-2' }, loading: false })
+        rerender()
+        await waitFor(() => expect(result.current.used).toBe(1))
+        expect(result.current.remaining).toBe(4)
     })
-
 })

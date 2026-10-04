@@ -9,17 +9,38 @@ import {
 } from '@testing-library/react';
 
 import App from '../App';
-import { IDBFactory } from 'fake-indexeddb';
 
 const mockConvert = vi.fn();
+const mockReadQuota = vi.fn();
+const mockRecordConversion = vi.fn();
+// Stands in for the account's count in Firestore.
+let serverCount = 0;
 
-vi.mock('../hooks/useFfmpeg', () => ({
-  useFfmpeg: () => ({
+vi.mock('../hooks/useAuth', () => ({
+  useAuth: () => ({ user: { uid: 'user-1' }, loading: false }),
+}));
+vi.mock('../utils/quota', () => ({
+  readQuotaCount: (...args: unknown[]) => mockReadQuota(...args),
+  recordConversion: (...args: unknown[]) => mockRecordConversion(...args),
+}));
+
+vi.mock('../hooks/useMediabunny', () => ({
+  useMediabunny: () => ({
     load: vi.fn(),
     convert: mockConvert,
     loadState: 'ready',
     loadError: null,
   }),
+}));
+
+const mockZipFile = vi.fn();
+const mockZipGenerate = vi.fn();
+
+vi.mock('jszip', () => ({
+  default: class {
+    file = mockZipFile;
+    generateAsync = mockZipGenerate;
+  },
 }));
 
 function makeFile(name: string, sizeBytes = 1024): File {
@@ -28,17 +49,57 @@ function makeFile(name: string, sizeBytes = 1024): File {
   return file;
 }
 
+async function dropFiles(...names: string[]) {
+  const dropzone = screen
+    .getByText(/drag video files here/i)
+    .closest('section')!;
+  await act(async () => {
+    fireEvent.drop(dropzone, {
+      dataTransfer: { files: names.map((name) => makeFile(name)) },
+    });
+  });
+}
+
+async function convertQueued() {
+  const button = await screen.findByRole('button', { name: /convert to mp3/i });
+  // Disabled until the account's quota has loaded.
+  await waitFor(() => expect(button).toBeEnabled());
+  await act(async () => {
+    fireEvent.click(button);
+  });
+}
+
+// Records the `download` filename of every anchor the app clicks to save a file.
+function captureDownloads(): string[] {
+  const names: string[] = [];
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+    this: HTMLAnchorElement,
+  ) {
+    names.push(this.download);
+  });
+  return names;
+}
+
 beforeEach(() => {
+  mockZipFile.mockReset();
+  mockZipGenerate.mockReset();
+  mockZipGenerate.mockResolvedValue(new Blob(['zip']));
+  // jsdom has no object-URL support.
+  URL.createObjectURL = vi.fn(() => 'blob:mock');
+  URL.revokeObjectURL = vi.fn();
   vi.stubEnv('VITE_DAILY_LIMIT', '5');
-  localStorage.clear();
-  (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB =
-    new IDBFactory();
+  serverCount = 0;
+  mockReadQuota.mockReset();
+  mockReadQuota.mockImplementation(async () => serverCount);
+  mockRecordConversion.mockReset();
+  mockRecordConversion.mockImplementation(async () => ++serverCount);
   mockConvert.mockReset();
   mockConvert.mockResolvedValue(new Blob(['fake mp3'], { type: 'audio/mpeg' }));
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 describe('App', () => {
   it('adds a dropped file to the queue', async () => {
@@ -72,11 +133,7 @@ describe('App', () => {
       dataTransfer: { files: [makeFile('clip.mp4')] },
     });
 
-    await act(async () => {
-      fireEvent.click(
-        await screen.findByRole('button', { name: /convert to mp3/i }),
-      );
-    });
+    await convertQueued();
 
     await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(1));
 
@@ -94,17 +151,48 @@ describe('App', () => {
     await act(async () => {
       fireEvent.drop(dropzone, { dataTransfer: { files } });
     });
-    await act(async () => {
-      fireEvent.click(
-        await screen.findByRole('button', { name: /convert to mp3/i }),
-      );
-    });
+    await convertQueued();
 
     await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(5));
 
+    expect(await screen.findByText(/5\/5 today/i)).toBeInTheDocument();
     expect(
-      await act(() => screen.findByTestId(/limit-message/i)),
+      await screen.findByRole('button', { name: /daily limit reached/i }),
+    ).toBeDisabled();
+    // The sixth file is left unconverted with the limit error on its row.
+    expect(
+      await screen.findByText(/daily limit reached \(5\/day\)/i),
     ).toBeInTheDocument();
+    expect(mockConvert).toHaveBeenCalledTimes(5);
+  });
+
+  it('starts from the count already used on the account', async () => {
+    serverCount = 4;
+    render(<App />);
+    expect(await screen.findByText(/4\/5 today/i)).toBeInTheDocument();
+    await dropFiles('a.mp4', 'b.mp4');
+    await convertQueued();
+
+    await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/5\/5 today/i)).toBeInTheDocument();
+    expect(mockRecordConversion).toHaveBeenCalledWith('user-1');
+  });
+
+  it('does not allow converting while the quota is loading', async () => {
+    mockReadQuota.mockReturnValue(new Promise(() => {}));
+    render(<App />);
+    await dropFiles('clip.mp4');
+    expect(screen.getByText(/checking quota/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /convert to mp3/i })).toBeDisabled();
+  });
+
+  it('does not allow converting when the quota cannot be read', async () => {
+    mockReadQuota.mockRejectedValue(new Error('offline'));
+    render(<App />);
+    await dropFiles('clip.mp4');
+    expect(await screen.findByText(/quota unavailable/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /convert to mp3/i })).toBeDisabled();
+    expect(mockConvert).not.toHaveBeenCalled();
   });
 
   it('retries only failed, non-invalid jobs', async () => {
@@ -118,23 +206,81 @@ describe('App', () => {
     fireEvent.drop(dropzone, {
       dataTransfer: { files: [makeFile('clip.mp4')] },
     });
-    await act(async () => {
-      fireEvent.click(
-        await screen.findByRole('button', { name: /convert to mp3/i }),
-      );
-    });
+    await convertQueued();
     await act(() => screen.findByText(/boom/i));
     await act(async () => {
       fireEvent.click(
         await screen.findByRole('button', { name: /retry failed/i }),
       );
     });
+    await convertQueued();
+    await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(2));
+  });
+
+  it('removes a single job from the queue', async () => {
+    render(<App />);
+    await dropFiles('keep.mp4', 'drop.mp4');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove drop.mp4' }));
+    expect(screen.queryByText('drop.mp4')).not.toBeInTheDocument();
+    expect(screen.getByText('keep.mp4')).toBeInTheDocument();
+    expect(screen.getByText('Queue (1)')).toBeInTheDocument();
+  });
+
+  it('clears the whole queue', async () => {
+    render(<App />);
+    await dropFiles('a.mp4', 'b.mp4');
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.queryByText('a.mp4')).not.toBeInTheDocument();
+    expect(screen.queryByText('b.mp4')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Queue/)).not.toBeInTheDocument();
+  });
+
+  it('clears completed jobs and keeps the rest', async () => {
+    render(<App />);
+    await dropFiles('done.mp4');
+    await convertQueued();
+    await screen.findByRole('button', { name: 'Save' });
+    await dropFiles('waiting.mp4');
+
+    fireEvent.click(screen.getByRole('button', { name: /clear completed/i }));
+    expect(screen.queryByText('done.mp4')).not.toBeInTheDocument();
+    expect(screen.getByText('waiting.mp4')).toBeInTheDocument();
+  });
+
+  it('saves a converted file under its .mp3 name', async () => {
+    const downloads = captureDownloads();
+    render(<App />);
+    await dropFiles('holiday.mp4');
+    await convertQueued();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+    expect(downloads).toEqual(['holiday.mp3']);
+    expect(URL.createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock');
+  });
+
+  it('downloads only the converted files as one zip', async () => {
+    mockConvert
+      .mockResolvedValueOnce(new Blob(['a']))
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce(new Blob(['c']));
+    const downloads = captureDownloads();
+    render(<App />);
+    await dropFiles('a.mp4', 'bad.mp4', 'c.mov');
+    await convertQueued();
+    await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(3));
+
     await act(async () => {
       fireEvent.click(
-        await screen.findByRole('button', { name: /convert to mp3/i }),
+        await screen.findByRole('button', { name: /download all/i }),
       );
     });
-    await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(downloads).toEqual(['converted-audio.zip']));
+    expect(mockZipFile.mock.calls.map(([name]) => name)).toEqual([
+      'a.mp3',
+      'c.mp3',
+    ]);
+    expect(mockZipGenerate).toHaveBeenCalledWith({ type: 'blob' });
   });
 
   it('renders progress bars with correct ARIA attributes', async () => {
