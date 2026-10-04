@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:rules": "npx --yes firebase-tools emulators:exec --only firestore --project demo-signal-converter \"vitest run --config vitest.rules.config.ts\""
   },
   "dependencies": {
     "@mediabunny/mp3-encoder": "^1.61.1",
@@ -20,6 +21,7 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.1.0",
     "@types/node": "^26.2.0",
@@ -36,7 +38,6 @@
     "@grpc/grpc-js": "^1.14.5"
   },
   "allowScripts": {
-    "esbuild": true,
     "@firebase/util@1.15.3": true,
     "protobufjs@7.6.6": true
   }

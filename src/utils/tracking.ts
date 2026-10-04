@@ -1,3 +1,5 @@
+import { app, auth } from '../lib/firebase'
+
 export type Consent = 'granted' | 'denied'
 export type UsageEventType = 'visit' | 'sign_in' | 'sign_up' | 'conversion'
 
@@ -50,7 +52,6 @@ function visitorId(): string {
 export async function trackEvent(type: UsageEventType, data: UsageEventData = {}): Promise<void> {
     if (getConsent() !== 'granted') return
     try {
-        const { app, auth } = await import('../lib/firebase')
         if (!app) return
         const { getFirestore, collection, addDoc, serverTimestamp } = await import('firebase/firestore/lite')
         await addDoc(collection(getFirestore(app), EVENTS_COLLECTION), {

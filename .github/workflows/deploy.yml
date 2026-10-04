@@ -28,6 +28,15 @@ jobs:
       - name: Test
         run: npm test
 
+      # The Firestore emulator needs Java 21 or newer.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Test Firestore rules (emulator)
+        run: npm run test:rules
+
       - name: Build (includes type-check via tsc -b)
         run: npm run build
         env:
