@@ -11,9 +11,10 @@ const mockInit = vi.fn()
 
 vi.mock('mediabunny', () => ({
     Input: vi.fn(),
-    Output: vi.fn().mockImplementation(() => ({
-        target: { buffer: new ArrayBuffer(8) },
-    })),
+    // Called with `new` — Vitest 4 requires a constructable (non-arrow) implementation.
+    Output: vi.fn().mockImplementation(function () {
+        return { target: { buffer: new ArrayBuffer(8) } }
+    }),
     Conversion: { init: (...args: unknown[]) => mockInit(...args) },
     ALL_FORMATS: {},
     BlobSource: vi.fn(),

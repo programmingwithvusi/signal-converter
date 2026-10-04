@@ -8,9 +8,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 600, // Mediabunny's core chunk is ~540kB but lazy-loaded, not in the critical path
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-        },
+        // Vite 8 (Rolldown) only accepts the function form
+        manualChunks: (id) =>
+          /node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id) ? 'vendor' : undefined,
       },
     },
   },

@@ -1,5 +1,5 @@
 {
-  "name": "mp4-to-mp3-converter",
+  "name": "signal-converter",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,27 +12,31 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@mediabunny/mp3-encoder": "^1.x",
+    "firebase": "^9.14.0",
     "jszip": "^3.10.1",
-    "mediabunny": "^1.x",
+    "protobufjs": "^8.8.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.6.3",
+    "@mediabunny/mp3-encoder": "^1.54.0",
+    "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.1.0",
-    "@types/node": "^24.13.2",
+    "@types/node": "^26.2.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.2.0",
+    "@vitejs/plugin-react": "^6.0.5",
     "fake-indexeddb": "^6.0.0",
-    "jsdom": "^25.0.1",
-    "oxlint": "^1.71.0",
-    "typescript": "~6.0.2",
-    "vite": "^7.1.0",
-    "vitest": "^3.2.7"
+    "jsdom": "^30.0.1",
+    "mediabunny": "^1.54.0",
+    "oxlint": "^1.78.0",
+    "typescript": "~7.0.2",
+    "vite": "^8.2.1",
+    "vitest": "^4.1.10"
   },
   "allowScripts": {
-    "esbuild@0.28.1": true
+    "esbuild": true,
+    "@firebase/util@1.15.3": true,
+    "protobufjs@7.6.6": true
   }
 }
