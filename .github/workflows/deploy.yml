@@ -45,6 +45,21 @@ jobs:
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
+      # Rules go live before the site that depends on them, and only from main.
+      - name: Deploy Firestore rules
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::warning::FIREBASE_SERVICE_ACCOUNT is not set, so firestore.rules was NOT deployed."
+            exit 0
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json" \
+            npx --yes firebase-tools deploy --only firestore:rules --project staging --non-interactive
+          rm -f "$RUNNER_TEMP/firebase-sa.json"
+
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v3
         with:

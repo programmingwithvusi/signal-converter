@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:rules": "npx --yes firebase-tools emulators:exec --only firestore --project demo-signal-converter \"vitest run --config vitest.rules.config.ts\""
+    "test:rules": "node scripts/test-rules.mjs"
   },
   "dependencies": {
     "@mediabunny/mp3-encoder": "^1.61.1",
