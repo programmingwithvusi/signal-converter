@@ -80,8 +80,9 @@ npm test
 npm run lint
 ```
 
-`firestore.rules` has its own suite, run against the Firestore emulator. It needs Java 21 or newer
-and downloads the emulator on first use:
+`firestore.rules` has its own suite, run against the Firestore emulator. The emulator needs Java 21
+or newer. It does not have to be your default Java: the script finds an installed JDK 21+ and uses
+it for that one command. The emulator is downloaded on first use:
 
 ```bash
 npm run test:rules
@@ -102,6 +103,11 @@ Output goes to `dist/`, deployable to any static host. No special server headers
 `.github/workflows/deploy.yml` lints, runs the unit and rules tests, builds and deploys to Netlify: a preview for each
 pull request into `main`, and production on every push to `main`. It needs these repository
 secrets: the four `VITE_FIREBASE_*` values, `NETLIFY_AUTH_TOKEN` and `NETLIFY_SITE_ID`.
+
+On a push to `main` it also deploys `firestore.rules`, before the site. That step needs a
+`FIREBASE_SERVICE_ACCOUNT` secret holding the JSON key of a Google Cloud service account with the
+**Firebase Rules Admin** and **Service Usage Consumer** roles. Without the secret the step is
+skipped with a warning and the rules must be deployed by hand.
 
 ## Stack
 
