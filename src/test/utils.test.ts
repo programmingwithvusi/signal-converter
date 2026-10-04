@@ -1,9 +1,12 @@
 // utils.test.ts
 import { describe, it, expect } from 'vitest'
-import { isAcceptedFile, formatBytes, mpThreeNameFor } from '../utils/utils'
+import { isAcceptedFile, isWithinSizeLimit, formatBytes, mpThreeNameFor, makeId } from '../utils/utils'
+import { MAX_FILE_SIZE_BYTES } from '../types/types'
 
-function makeFile(name: string): File {
-    return new File(['x'], name)
+function makeFile(name: string, sizeBytes?: number): File {
+    const file = new File(['x'], name)
+    if (sizeBytes !== undefined) Object.defineProperty(file, 'size', { value: sizeBytes })
+    return file
 }
 
 describe('isAcceptedFile', () => {
@@ -18,6 +21,22 @@ describe('isAcceptedFile', () => {
     })
 })
 
+describe('isWithinSizeLimit', () => {
+    it('accepts files up to and including the default limit', () => {
+        expect(isWithinSizeLimit(makeFile('clip.mp4', 1024))).toBe(true)
+        expect(isWithinSizeLimit(makeFile('clip.mp4', MAX_FILE_SIZE_BYTES))).toBe(true)
+    })
+
+    it('rejects files over the default limit', () => {
+        expect(isWithinSizeLimit(makeFile('clip.mp4', MAX_FILE_SIZE_BYTES + 1))).toBe(false)
+    })
+
+    it('honours a custom limit', () => {
+        expect(isWithinSizeLimit(makeFile('clip.mp4', 100), 100)).toBe(true)
+        expect(isWithinSizeLimit(makeFile('clip.mp4', 101), 100)).toBe(false)
+    })
+})
+
 describe('formatBytes', () => {
     it('formats bytes under 1024 as B', () => {
         expect(formatBytes(512)).toBe('512 B')
@@ -29,7 +48,7 @@ describe('formatBytes', () => {
     })
 })
 
-describe('mp3NameFor', () => {
+describe('mpThreeNameFor', () => {
     it('replaces the extension with .mp3', () => {
         expect(mpThreeNameFor('vacation.mp4')).toBe('vacation.mp3')
         expect(mpThreeNameFor('clip.final.mov')).toBe('clip.final.mp3')
@@ -37,5 +56,16 @@ describe('mp3NameFor', () => {
 
     it('handles filenames with no extension', () => {
         expect(mpThreeNameFor('novideo')).toBe('novideo.mp3')
+    })
+})
+
+describe('makeId', () => {
+    it('returns a non-empty string', () => {
+        expect(makeId()).toMatch(/^[a-z0-9]+$/)
+    })
+
+    it('returns a different id on each call', () => {
+        const ids = new Set(Array.from({ length: 200 }, makeId))
+        expect(ids.size).toBe(200)
     })
 })

@@ -1,7 +1,7 @@
-// useFfmpeg.test.ts
+// useMediabunny.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
-import { useFfmpeg } from '../hooks/useFfmpeg'
+import { useMediabunny } from '../hooks/useMediabunny'
 
 // Mock the dynamically-imported module itself. Vitest intercepts
 // `await import('mediabunny')` the same way it intercepts a static
@@ -33,9 +33,9 @@ beforeEach(() => {
     mockExecute.mockReset()
 })
 
-describe('useFfmpeg', () => {
+describe('useMediabunny', () => {
     it('reaches ready state on load()', async () => {
-        const { result } = renderHook(() => useFfmpeg())
+        const { result } = renderHook(() => useMediabunny())
         // console.log('Before loadState:', result.current.load())
 
         await act(() => result.current.load())
@@ -49,7 +49,7 @@ describe('useFfmpeg', () => {
             execute: mockExecute,
             onProgress: undefined,
         })
-        const { result } = renderHook(() => useFfmpeg())
+        const { result } = renderHook(() => useMediabunny())
         await act(() => result.current.load())
         await result.current.convert(makeFile(), '256k', () => { })
 
@@ -60,7 +60,7 @@ describe('useFfmpeg', () => {
 
     it('throws when the file has no convertible audio track', async () => {
         mockInit.mockResolvedValue({ isValid: false, execute: mockExecute })
-        const { result } = renderHook(() => useFfmpeg())
+        const { result } = renderHook(() => useMediabunny())
         await act(() => result.current.load())
 
         await expect(result.current.convert(makeFile(), '192k', () => { })).rejects.toThrow(
@@ -75,7 +75,7 @@ describe('useFfmpeg', () => {
         const registerMp3Encoder = vi.fn()
         vi.doMock('@mediabunny/mp3-encoder', () => ({ registerMp3Encoder }))
 
-        const { result } = renderHook(() => useFfmpeg())
+        const { result } = renderHook(() => useMediabunny())
         await act(() => result.current.load())
 
         expect(registerMp3Encoder).toHaveBeenCalledOnce()

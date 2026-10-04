@@ -6,8 +6,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-//import JSZip from 'jszip';
-import { useFfmpeg } from './hooks/useFfmpeg';
+import { useMediabunny } from './hooks/useMediabunny';
 import {
   ACCEPTED_EXTENSIONS,
   BITRATE_OPTIONS,
@@ -26,7 +25,7 @@ import { useDailyQuota } from './hooks/useDailyQuota';
 import { trackEvent } from './utils/tracking';
 
 export default function App({ account }: { account?: ReactNode }) {
-  const { load, convert, loadState, loadError } = useFfmpeg();
+  const { load, convert, loadState, loadError } = useMediabunny();
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
   const [bitrate, setBitrate] =
     useState<(typeof BITRATE_OPTIONS)[number]>('192k');
@@ -68,9 +67,6 @@ export default function App({ account }: { account?: ReactNode }) {
     [addFiles],
   );
 
-  //const removeJob = (id: string) =>
-  //  setJobs((prev) => prev.filter((j) => j.id !== id));
-
   const removeJob = (id: string) => {
     setJobs((prev) => {
       const job = prev.find((j) => j.id === id);
@@ -100,7 +96,8 @@ export default function App({ account }: { account?: ReactNode }) {
   const quota = useDailyQuota();
 
   const convertAll = async () => {
-    if (loadState !== 'ready' || isConverting) return;
+    if (loadState !== 'ready' || quota.status !== 'ready' || isConverting)
+      return;
 
     const queued = jobs.filter(
       (j) => (j.status === 'queued' || j.status === 'error') && !j.invalid,
@@ -199,23 +196,6 @@ export default function App({ account }: { account?: ReactNode }) {
     a.click();
     URL.revokeObjectURL(url);
   };
-  /*
-  const downloadAllZip = async () => {
-    const done = jobs.filter(
-      (j) => j.status === 'done' && j.outputBlob && j.outputName,
-    );
-    if (done.length === 0) return;
-    const zip = new JSZip();
-    done.forEach((j) => zip.file(j.outputName!, j.outputBlob!));
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'converted-audio.zip';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-*/
 
   const doneCount = jobs.filter((j) => j.status === 'done').length;
   const hasQueued = jobs.some(
@@ -227,7 +207,9 @@ export default function App({ account }: { account?: ReactNode }) {
   );
 
   const blockedByQuotaIds = new Set(
-    eligibleForConversion.slice(quota.remaining).map((j) => j.id),
+    quota.status === 'ready'
+      ? eligibleForConversion.slice(quota.remaining).map((j) => j.id)
+      : [],
   );
 
   const failedCount = jobs.filter(
@@ -316,7 +298,9 @@ export default function App({ account }: { account?: ReactNode }) {
               Browse Files
             </button>
             <span className="dropzone__hint">
-              MP4 · MPEG · FLV · F4V · MOV · MKV · AVI · WEBM
+              {ACCEPTED_EXTENSIONS.map((ext) =>
+                ext.slice(1).toUpperCase(),
+              ).join(' · ')}
             </span>
             <input
               ref={fileInputRef}
@@ -349,12 +333,12 @@ export default function App({ account }: { account?: ReactNode }) {
             </div>
           </div>
           <button
-            data-testid="limit-message"
             type="button"
             className="btn btn--convert"
             disabled={
               !hasQueued ||
               loadState !== 'ready' ||
+              quota.status !== 'ready' ||
               isConverting ||
               quota.remaining <= 0
             }
@@ -362,12 +346,16 @@ export default function App({ account }: { account?: ReactNode }) {
           >
             {isConverting
               ? 'Converting…'
-              : quota.remaining <= 0
+              : quota.status === 'ready' && quota.remaining <= 0
                 ? 'Daily limit reached'
                 : 'Convert to MP3'}
           </button>
           <span className="quota-badge" aria-live="polite">
-            {quota.used}/{quota.limit} today
+            {quota.status === 'ready'
+              ? `${quota.used}/${quota.limit} today`
+              : quota.status === 'loading'
+                ? 'Checking quota…'
+                : 'Quota unavailable — check your connection'}
           </span>
         </section>
 
