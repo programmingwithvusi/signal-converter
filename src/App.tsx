@@ -23,14 +23,24 @@ import {
 } from './utils/utils';
 import { useDailyQuota } from './hooks/useDailyQuota';
 import { trackEvent } from './utils/tracking';
+import {
+  CUSTOM_PERCENT_MAX,
+  CUSTOM_PERCENT_MIN,
+  SPEED_PRESETS,
+  customSuffix,
+  describeSpeed,
+  parseCustomPercent,
+  type SpeedPresetId,
+} from './utils/speed';
 
 export default function App({ account }: { account?: ReactNode }) {
   const { load, convert, loadState, loadError } = useMediabunny();
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
   const [bitrate, setBitrate] =
     useState<(typeof BITRATE_OPTIONS)[number]>('192k');
-  // 45 → 33: play the track like a 45 rpm record at 33⅓ rpm.
-  const [slowed, setSlowed] = useState(false);
+  // Turntable speed: a preset such as 45 → 33, or a custom percentage.
+  const [speedId, setSpeedId] = useState<SpeedPresetId>('normal');
+  const [customPercent, setCustomPercent] = useState('85');
   const [isDragOver, setIsDragOver] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -97,8 +107,22 @@ export default function App({ account }: { account?: ReactNode }) {
     loadState === 'error' ? 'error' : isConverting ? 'busy' : 'idle';
   const quota = useDailyQuota();
 
+  const customFactor = parseCustomPercent(customPercent);
+  // null while Custom is chosen and the percentage is not valid.
+  const speed =
+    speedId === 'custom'
+      ? customFactor === null
+        ? null
+        : { factor: customFactor, suffix: customSuffix(customFactor) }
+      : SPEED_PRESETS.find((p) => p.id === speedId)!;
+
   const convertAll = async () => {
-    if (loadState !== 'ready' || quota.status !== 'ready' || isConverting)
+    if (
+      loadState !== 'ready' ||
+      quota.status !== 'ready' ||
+      isConverting ||
+      speed === null
+    )
       return;
 
     const queued = jobs.filter(
@@ -143,7 +167,7 @@ export default function App({ account }: { account?: ReactNode }) {
               ),
             );
           },
-          { slowed },
+          { speed: speed.factor },
         );
         quota.consume();
         void trackEvent('conversion', { bitrate, inputBytes: job.file.size });
@@ -155,7 +179,7 @@ export default function App({ account }: { account?: ReactNode }) {
                   status: 'done',
                   progress: 100,
                   outputBlob: blob,
-                  outputName: mpThreeNameFor(job.file.name, slowed),
+                  outputName: mpThreeNameFor(job.file.name, speed.suffix),
                   outputSizeBytes: blob.size,
                 }
               : j,
@@ -345,18 +369,58 @@ export default function App({ account }: { account?: ReactNode }) {
             <span className="control-label" id="speed-label">
               Speed
             </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={slowed}
-              aria-labelledby="speed-label speed-switch"
-              id="speed-switch"
-              className="switch"
-              title="Play it like a 45 at 33⅓: about 26% slower and about 5 semitones lower"
-              onClick={() => setSlowed((on) => !on)}
+            <div
+              className="segmented segmented--wrap"
+              role="group"
+              aria-labelledby="speed-label"
             >
-              45 → 33
-            </button>
+              {SPEED_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  aria-pressed={speedId === preset.id}
+                  className={`segmented__opt ${speedId === preset.id ? 'segmented__opt--active' : ''}`}
+                  title={describeSpeed(preset.factor)}
+                  onClick={() => setSpeedId(preset.id)}
+                >
+                  {preset.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                aria-pressed={speedId === 'custom'}
+                className={`segmented__opt ${speedId === 'custom' ? 'segmented__opt--active' : ''}`}
+                onClick={() => setSpeedId('custom')}
+              >
+                Custom %
+              </button>
+            </div>
+            {speedId === 'custom' && (
+              <div className="speed-custom">
+                <input
+                  id="speed-custom"
+                  className="speed-custom__input"
+                  type="number"
+                  inputMode="decimal"
+                  min={CUSTOM_PERCENT_MIN}
+                  max={CUSTOM_PERCENT_MAX}
+                  step={0.1}
+                  value={customPercent}
+                  aria-label="Custom speed in percent"
+                  aria-invalid={customFactor === null}
+                  aria-describedby="speed-custom-hint"
+                  onChange={(e) => setCustomPercent(e.target.value)}
+                />
+                <span
+                  id="speed-custom-hint"
+                  className={`speed-custom__hint ${customFactor === null ? 'speed-custom__hint--error' : ''}`}
+                >
+                  {customFactor === null
+                    ? `Enter ${CUSTOM_PERCENT_MIN}–${CUSTOM_PERCENT_MAX}%`
+                    : describeSpeed(customFactor)}
+                </span>
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -366,7 +430,8 @@ export default function App({ account }: { account?: ReactNode }) {
               loadState !== 'ready' ||
               quota.status !== 'ready' ||
               isConverting ||
-              quota.remaining <= 0
+              quota.remaining <= 0 ||
+              speed === null
             }
             onClick={convertAll}
           >

@@ -1,11 +1,14 @@
 import { useCallback, useRef, useState } from 'react'
-import { slowedAudioOptions } from '../utils/slowdown'
+import { speedAudioOptions } from '../utils/speed'
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 
 export type ConvertOptions = {
-  /** Play it like a 45 at 33⅓: about 26% slower and about 5 semitones lower. */
-  slowed?: boolean
+  /**
+   * Playback speed as a fraction of the original, changing tempo and pitch together like a turntable:
+   * 0.741 plays a 45 at 33⅓. Leave it out, or pass 1, for normal speed.
+   */
+  speed?: number
 }
 
 export function useMediabunny() {
@@ -49,9 +52,10 @@ export function useMediabunny() {
       const conversion = await Conversion.init({
         input,
         output,
-        audio: options.slowed
-          ? { bitrate: bpsFromLabel(bitrate), ...slowedAudioOptions(AudioSample) }
-          : { bitrate: bpsFromLabel(bitrate) },
+        audio:
+          options.speed !== undefined && options.speed !== 1
+            ? { bitrate: bpsFromLabel(bitrate), ...speedAudioOptions(options.speed, AudioSample) }
+            : { bitrate: bpsFromLabel(bitrate) },
       })
 
       if (!conversion.isValid) {

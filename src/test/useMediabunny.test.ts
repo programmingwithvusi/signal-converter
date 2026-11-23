@@ -59,16 +59,22 @@ describe('useMediabunny', () => {
         )
     })
 
-    it('slows the audio only when 45 → 33 is asked for', async () => {
+    it('changes the speed only when a speed other than 1 is asked for', async () => {
         mockInit.mockResolvedValue({ isValid: true, execute: mockExecute, onProgress: undefined })
         const { result } = renderHook(() => useMediabunny())
         await act(() => result.current.load())
 
-        await result.current.convert(makeFile(), '192k', () => { }, { slowed: false })
+        await result.current.convert(makeFile(), '192k', () => { })
         expect(mockInit.mock.calls[0][0].audio).toEqual({ bitrate: 192000 })
 
-        await result.current.convert(makeFile(), '192k', () => { }, { slowed: true })
-        expect(mockInit.mock.calls[1][0].audio).toEqual({
+        await result.current.convert(makeFile(), '192k', () => { }, { speed: 1 })
+        expect(mockInit.mock.calls[1][0].audio).toEqual({ bitrate: 192000 })
+
+        await result.current.convert(makeFile(), '320k', () => { }, { speed: 45 / (100 / 3) })
+        expect(mockInit.mock.calls[2][0].audio).toMatchObject({ bitrate: 320000, sampleRate: 32667, processedSampleRate: 44100 })
+
+        await result.current.convert(makeFile(), '192k', () => { }, { speed: (100 / 3) / 45 })
+        expect(mockInit.mock.calls[3][0].audio).toEqual({
             bitrate: 192000,
             numberOfChannels: 2,
             sampleRate: 59535,
