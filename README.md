@@ -26,6 +26,22 @@ can't touch the filesystem or spawn native processes, so this rebuild keeps the 
 
 - **Input formats:** MP4, MPEG, FLV, F4V, MOV, MKV, AVI, WEBM — up to 500 MB per file.
 - **Queue:** per-file progress, retry failed, clear completed, save one file or all as a `.zip`.
+- **Turntable speed:** plays the track as if a record were spun at the wrong speed. Tempo and pitch
+  change together by the ratio of the two speeds, which gives the heavy, slowed sound of a 45 played at
+  33⅓ (about 26% slower and 5.2 semitones lower, so a 120–128 BPM house track lands at roughly 89–95 BPM).
+
+  | Setting   | Speed | Pitch          | Saved as                      |
+  | --------- | ----- | -------------- | ----------------------------- |
+  | Normal    | 1     | unchanged      | `<name>.mp3`                  |
+  | 45 → 33   | 0.741 | −5.2 semitones | `<name> (45 at 33).mp3`       |
+  | 78 → 45   | 0.577 | −9.5 semitones | `<name> (78 at 45).mp3`       |
+  | 78 → 33   | 0.427 | −14.7 semitones | `<name> (78 at 33).mp3`       |
+  | 33 → 45   | 1.35  | +5.2 semitones | `<name> (33 at 45).mp3`       |
+  | Custom %  | 40–200% | follows speed | `<name> (85% speed).mp3`     |
+
+  The audio is resampled to 44,100 ÷ speed Hz and played back as 44,100 Hz stereo, so the effect needs no
+  extra library. The resampling rate is rounded to a whole number, which keeps every speed within 0.0023%
+  of the one chosen.
 - **Sign-in:** the converter sits behind Firebase Authentication (Google, or email and password
   with password reset).
 - **Daily quota:** 5 conversions per day per account, resetting at midnight UTC. The count lives in

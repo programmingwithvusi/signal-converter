@@ -21,10 +21,11 @@ export function formatBytes(bytes: number): string {
     return `${value.toFixed(1)} ${units[unitIndex]}`
 }
 
-export function mpThreeNameFor(originalName: string): string {
+/** Swaps the last extension for `.mp3`, adding `suffix` (such as ` (45 at 33)`) before it. */
+export function mpThreeNameFor(originalName: string, suffix = ''): string {
     const dot = originalName.lastIndexOf('.')
     const base = dot >= 0 ? originalName.slice(0, dot) : originalName
-    return `${base}.mp3`
+    return `${base}${suffix}.mp3`
 }
 
 export function makeId(): string {

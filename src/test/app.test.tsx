@@ -252,6 +252,55 @@ describe('App', () => {
     expect(mockConvert.mock.calls[1][1]).toBe('320k');
   });
 
+  it('converts at normal speed until a speed preset is chosen', async () => {
+    const downloads = captureDownloads();
+    render(<App />);
+    const normal = screen.getByRole('button', { name: 'Normal' });
+    const slowest = screen.getByRole('button', { name: '78 → 33' });
+    expect(normal).toHaveAttribute('aria-pressed', 'true');
+    expect(slowest).toHaveAttribute('aria-pressed', 'false');
+
+    await dropFiles('normal.mp4');
+    await convertQueued();
+    await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(1));
+    expect(mockConvert.mock.calls[0][3]).toEqual({ speed: 1 });
+
+    fireEvent.click(slowest);
+    expect(slowest).toHaveAttribute('aria-pressed', 'true');
+    expect(normal).toHaveAttribute('aria-pressed', 'false');
+    await dropFiles('slowed.mp4');
+    await convertQueued();
+    await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(2));
+    expect(mockConvert.mock.calls[1][3].speed).toBeCloseTo(100 / 3 / 78, 12);
+
+    for (const save of await screen.findAllByRole('button', { name: 'Save' })) {
+      fireEvent.click(save);
+    }
+    expect(downloads).toEqual(['normal.mp3', 'slowed (78 at 33).mp3']);
+  });
+
+  it('converts at a custom speed and will not convert at an invalid one', async () => {
+    const downloads = captureDownloads();
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Custom %' }));
+    const percent = screen.getByRole('spinbutton', { name: /custom speed in percent/i });
+    expect(percent).toHaveValue(85);
+    expect(screen.getByText('85% speed · −2.8 semitones')).toBeInTheDocument();
+
+    await dropFiles('custom.mp4');
+    await convertQueued();
+    await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(1));
+    expect(mockConvert.mock.calls[0][3]).toEqual({ speed: 0.85 });
+    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+    expect(downloads).toEqual(['custom (85% speed).mp3']);
+
+    fireEvent.change(percent, { target: { value: '300' } });
+    expect(percent).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByText('Enter 40–200%')).toBeInTheDocument();
+    await dropFiles('second.mp4');
+    expect(screen.getByRole('button', { name: /convert to mp3/i })).toBeDisabled();
+  });
+
   it('reports a failed engine and does not allow converting', async () => {
     engine.loadState = 'error';
     engine.loadError = 'WebCodecs unavailable';

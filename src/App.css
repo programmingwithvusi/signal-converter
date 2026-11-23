@@ -243,6 +243,52 @@
   font-weight: 600;
 }
 
+/* Speed presets wrap onto a second line on narrow screens */
+.segmented--wrap {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+/* Buttons fill each row; the bottom border separates wrapped rows and is clipped on the last one */
+.segmented--wrap .segmented__opt {
+  flex: 1 1 auto;
+  border-bottom: 1px solid var(--line-strong);
+  margin-bottom: -1px;
+}
+
+.speed-custom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.speed-custom__input {
+  width: 6.5em;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--fg);
+}
+.speed-custom__input:focus-visible {
+  outline: none;
+  border-color: var(--amber);
+}
+.speed-custom__input[aria-invalid='true'] {
+  border-color: var(--red);
+}
+
+.speed-custom__hint {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px;
+  color: var(--fg-faint);
+}
+.speed-custom__hint--error {
+  color: var(--red);
+}
+
 /* ---------- Buttons ---------- */
 
 .btn {

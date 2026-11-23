@@ -21,6 +21,7 @@ vi.mock('mediabunny', () => ({
     BufferTarget: vi.fn(),
     Mp3OutputFormat: vi.fn(),
     canEncodeAudio: vi.fn().mockResolvedValue(true),
+    AudioSample: class {},
 }))
 
 function makeFile(name = 'clip.mp4'): File {
@@ -56,6 +57,31 @@ describe('useMediabunny', () => {
         expect(mockInit).toHaveBeenCalledWith(
             expect.objectContaining({ audio: { bitrate: 256000 } })
         )
+    })
+
+    it('changes the speed only when a speed other than 1 is asked for', async () => {
+        mockInit.mockResolvedValue({ isValid: true, execute: mockExecute, onProgress: undefined })
+        const { result } = renderHook(() => useMediabunny())
+        await act(() => result.current.load())
+
+        await result.current.convert(makeFile(), '192k', () => { })
+        expect(mockInit.mock.calls[0][0].audio).toEqual({ bitrate: 192000 })
+
+        await result.current.convert(makeFile(), '192k', () => { }, { speed: 1 })
+        expect(mockInit.mock.calls[1][0].audio).toEqual({ bitrate: 192000 })
+
+        await result.current.convert(makeFile(), '320k', () => { }, { speed: 45 / (100 / 3) })
+        expect(mockInit.mock.calls[2][0].audio).toMatchObject({ bitrate: 320000, sampleRate: 32667, processedSampleRate: 44100 })
+
+        await result.current.convert(makeFile(), '192k', () => { }, { speed: (100 / 3) / 45 })
+        expect(mockInit.mock.calls[3][0].audio).toEqual({
+            bitrate: 192000,
+            numberOfChannels: 2,
+            sampleRate: 59535,
+            processedNumberOfChannels: 2,
+            processedSampleRate: 44100,
+            process: expect.any(Function),
+        })
     })
 
     it('throws when the file has no convertible audio track', async () => {

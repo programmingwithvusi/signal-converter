@@ -1,6 +1,15 @@
 import { useCallback, useRef, useState } from 'react'
+import { speedAudioOptions } from '../utils/speed'
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
+
+export type ConvertOptions = {
+  /**
+   * Playback speed as a fraction of the original, changing tempo and pitch together like a turntable:
+   * 0.741 plays a 45 at 33⅓. Leave it out, or pass 1, for normal speed.
+   */
+  speed?: number
+}
 
 export function useMediabunny() {
   const readyRef = useRef(false)
@@ -27,8 +36,13 @@ export function useMediabunny() {
   }, [loadState])
 
   const convert = useCallback(
-    async (file: File, bitrate: string, onProgress: (ratio: number) => void): Promise<Blob> => {
-      const { Input, Output, Conversion, ALL_FORMATS, BlobSource, BufferTarget, Mp3OutputFormat } = await import(
+    async (
+      file: File,
+      bitrate: string,
+      onProgress: (ratio: number) => void,
+      options: ConvertOptions = {},
+    ): Promise<Blob> => {
+      const { Input, Output, Conversion, ALL_FORMATS, BlobSource, BufferTarget, Mp3OutputFormat, AudioSample } = await import(
         'mediabunny'
       )
 
@@ -38,7 +52,10 @@ export function useMediabunny() {
       const conversion = await Conversion.init({
         input,
         output,
-        audio: { bitrate: bpsFromLabel(bitrate) },
+        audio:
+          options.speed !== undefined && options.speed !== 1
+            ? { bitrate: bpsFromLabel(bitrate), ...speedAudioOptions(options.speed, AudioSample) }
+            : { bitrate: bpsFromLabel(bitrate) },
       })
 
       if (!conversion.isValid) {
