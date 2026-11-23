@@ -252,6 +252,33 @@ describe('App', () => {
     expect(mockConvert.mock.calls[1][1]).toBe('320k');
   });
 
+  it('converts at normal speed unless 45 → 33 is switched on', async () => {
+    const downloads = captureDownloads();
+    render(<App />);
+    const speed = screen.getByRole('switch', { name: /45 → 33/ });
+    expect(speed).toHaveAttribute('aria-checked', 'false');
+
+    await dropFiles('normal.mp4');
+    await convertQueued();
+    await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(1));
+    expect(mockConvert.mock.calls[0][3]).toEqual({ slowed: false });
+
+    fireEvent.click(speed);
+    expect(speed).toHaveAttribute('aria-checked', 'true');
+    await dropFiles('slowed.mp4');
+    await convertQueued();
+    await waitFor(() => expect(mockConvert).toHaveBeenCalledTimes(2));
+    expect(mockConvert.mock.calls[1][3]).toEqual({ slowed: true });
+
+    for (const save of await screen.findAllByRole('button', { name: 'Save' })) {
+      fireEvent.click(save);
+    }
+    expect(downloads).toEqual(['normal.mp3', 'slowed (45 at 33).mp3']);
+
+    fireEvent.click(speed);
+    expect(speed).toHaveAttribute('aria-checked', 'false');
+  });
+
   it('reports a failed engine and does not allow converting', async () => {
     engine.loadState = 'error';
     engine.loadError = 'WebCodecs unavailable';

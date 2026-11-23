@@ -1,6 +1,12 @@
 import { useCallback, useRef, useState } from 'react'
+import { slowedAudioOptions } from '../utils/slowdown'
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
+
+export type ConvertOptions = {
+  /** Play it like a 45 at 33⅓: about 26% slower and about 5 semitones lower. */
+  slowed?: boolean
+}
 
 export function useMediabunny() {
   const readyRef = useRef(false)
@@ -27,8 +33,13 @@ export function useMediabunny() {
   }, [loadState])
 
   const convert = useCallback(
-    async (file: File, bitrate: string, onProgress: (ratio: number) => void): Promise<Blob> => {
-      const { Input, Output, Conversion, ALL_FORMATS, BlobSource, BufferTarget, Mp3OutputFormat } = await import(
+    async (
+      file: File,
+      bitrate: string,
+      onProgress: (ratio: number) => void,
+      options: ConvertOptions = {},
+    ): Promise<Blob> => {
+      const { Input, Output, Conversion, ALL_FORMATS, BlobSource, BufferTarget, Mp3OutputFormat, AudioSample } = await import(
         'mediabunny'
       )
 
@@ -38,7 +49,9 @@ export function useMediabunny() {
       const conversion = await Conversion.init({
         input,
         output,
-        audio: { bitrate: bpsFromLabel(bitrate) },
+        audio: options.slowed
+          ? { bitrate: bpsFromLabel(bitrate), ...slowedAudioOptions(AudioSample) }
+          : { bitrate: bpsFromLabel(bitrate) },
       })
 
       if (!conversion.isValid) {

@@ -243,6 +243,30 @@
   font-weight: 600;
 }
 
+/* 45 → 33 speed switch: matches the bitrate buttons, amber when on */
+.switch {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  padding: 9px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--fg-dim);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.switch:hover {
+  color: var(--fg);
+}
+.switch[aria-checked='true'] {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #1a1204;
+  font-weight: 600;
+}
+
 /* ---------- Buttons ---------- */
 
 .btn {

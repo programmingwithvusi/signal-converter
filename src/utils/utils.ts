@@ -21,10 +21,13 @@ export function formatBytes(bytes: number): string {
     return `${value.toFixed(1)} ${units[unitIndex]}`
 }
 
-export function mpThreeNameFor(originalName: string): string {
+/** Suffix added to the file name of a 45 → 33 conversion. */
+export const SLOWED_NAME_SUFFIX = ' (45 at 33)'
+
+export function mpThreeNameFor(originalName: string, slowed = false): string {
     const dot = originalName.lastIndexOf('.')
     const base = dot >= 0 ? originalName.slice(0, dot) : originalName
-    return `${base}.mp3`
+    return `${base}${slowed ? SLOWED_NAME_SUFFIX : ''}.mp3`
 }
 
 export function makeId(): string {

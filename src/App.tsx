@@ -29,6 +29,8 @@ export default function App({ account }: { account?: ReactNode }) {
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
   const [bitrate, setBitrate] =
     useState<(typeof BITRATE_OPTIONS)[number]>('192k');
+  // 45 → 33: play the track like a 45 rpm record at 33⅓ rpm.
+  const [slowed, setSlowed] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -129,13 +131,20 @@ export default function App({ account }: { account?: ReactNode }) {
         ),
       );
       try {
-        const blob = await convert(job.file, bitrate, (ratio) => {
-          setJobs((prev) =>
-            prev.map((j) =>
-              j.id === job.id ? { ...j, progress: Math.round(ratio * 100) } : j,
-            ),
-          );
-        });
+        const blob = await convert(
+          job.file,
+          bitrate,
+          (ratio) => {
+            setJobs((prev) =>
+              prev.map((j) =>
+                j.id === job.id
+                  ? { ...j, progress: Math.round(ratio * 100) }
+                  : j,
+              ),
+            );
+          },
+          { slowed },
+        );
         quota.consume();
         void trackEvent('conversion', { bitrate, inputBytes: job.file.size });
         setJobs((prev) =>
@@ -146,7 +155,7 @@ export default function App({ account }: { account?: ReactNode }) {
                   status: 'done',
                   progress: 100,
                   outputBlob: blob,
-                  outputName: mpThreeNameFor(job.file.name),
+                  outputName: mpThreeNameFor(job.file.name, slowed),
                   outputSizeBytes: blob.size,
                 }
               : j,
@@ -331,6 +340,23 @@ export default function App({ account }: { account?: ReactNode }) {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="control-group">
+            <span className="control-label" id="speed-label">
+              Speed
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={slowed}
+              aria-labelledby="speed-label speed-switch"
+              id="speed-switch"
+              className="switch"
+              title="Play it like a 45 at 33⅓: about 26% slower and about 5 semitones lower"
+              onClick={() => setSlowed((on) => !on)}
+            >
+              45 → 33
+            </button>
           </div>
           <button
             type="button"

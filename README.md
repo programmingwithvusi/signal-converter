@@ -26,6 +26,11 @@ can't touch the filesystem or spawn native processes, so this rebuild keeps the 
 
 - **Input formats:** MP4, MPEG, FLV, F4V, MOV, MKV, AVI, WEBM — up to 500 MB per file.
 - **Queue:** per-file progress, retry failed, clear completed, save one file or all as a `.zip`.
+- **45 → 33 speed switch:** plays the track the way a 45 rpm record sounds at 33⅓ rpm. Tempo and pitch
+  both drop to 33⅓ ÷ 45 ≈ 0.741 of the original (about 26% slower and about 5.2 semitones lower), so a
+  120–128 BPM house track lands at roughly 89–95 BPM. The audio is resampled to 59,535 Hz and played
+  back as 44,100 Hz stereo, so the effect is exact and needs no extra library. Slowed files are saved
+  as `<name> (45 at 33).mp3`.
 - **Sign-in:** the converter sits behind Firebase Authentication (Google, or email and password
   with password reset).
 - **Daily quota:** 5 conversions per day per account, resetting at midnight UTC. The count lives in

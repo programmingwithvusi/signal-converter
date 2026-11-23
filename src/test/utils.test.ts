@@ -57,6 +57,11 @@ describe('mpThreeNameFor', () => {
     it('handles filenames with no extension', () => {
         expect(mpThreeNameFor('novideo')).toBe('novideo.mp3')
     })
+
+    it('marks a 45 → 33 conversion in the name', () => {
+        expect(mpThreeNameFor('deep house.mp4', true)).toBe('deep house (45 at 33).mp3')
+        expect(mpThreeNameFor('novideo', true)).toBe('novideo (45 at 33).mp3')
+    })
 })
 
 describe('makeId', () => {
